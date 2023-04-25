@@ -194,9 +194,7 @@ def Stab_INX_MAX(attr_val,stc,nodes,edges,time_inv):
                             pr2 -= 1
                             if pr2 == 0:
                                 break
-                        if pr2 == 0:
-                            break
-                        else:
+                        if pr2 > 0:
                             if skyline[pr2][0][0] <= current_w:
                                 dominate_counter[str((current_w,left,right))] += 1
                                 for s in skyline[pr2]:
@@ -269,9 +267,7 @@ def Growth_UN_MAX(attr_val,stc,nodes,edges,time_inv):
                             pr2 -= 1
                             if pr2 == 0:
                                 break
-                        if pr2 == 0:
-                            break
-                        else:
+                        if pr2 > 0:
                             if skyline[pr2][0][0] <= current_w:
                                 dominate_counter[str((current_w,left,right))] += 1
                                 for s in skyline[pr2]:
@@ -337,22 +333,15 @@ def Shrink_UN_MIN(attr_val,stc,nodes,edges,time_inv):
                         #print(current_w, '<=', previous_w)
                         for s in skyline[pr]:
                             dominate_counter[str(tuple(s))] += 1
-                    # if left[-1] not reached the end --> left != right - 1
-                    if left[-1] != list(edges.columns)[list(edges.columns).index(right[0])-1]:
+                    # if left[0] not reached the end --> left != edges.columns[0]
+                    if left[0] != edges.columns[0]:
+                    #if left[-1] != list(edges.columns)[list(edges.columns).index(right[0])-1]:
                         pr2 = len(left)+1
-                        while not skyline[pr2] and pr2 <= len(list(
-                                edges.columns)[list(edges.columns).index(left[0])
-                                                  :list(edges.columns).index(right[0])]):
+                        while not skyline[pr2] and pr2 <= len(list(edges.columns)[:list(edges.columns).index(right[0])]):
                             pr2 += 1
-                            if pr2 == len(list(
-                                    edges.columns)[list(edges.columns).index(left[0])
-                                                      :list(edges.columns).index(right[0])+1]):
+                            if pr2 == len(list(edges.columns)[:list(edges.columns).index(right[0])])+1:
                                 break
-                        if pr2 == len(list(
-                                edges.columns)[list(edges.columns).index(left[0])
-                                                  :list(edges.columns).index(right[0])+1]):
-                            break
-                        else:
+                        if pr2 < len(list(edges.columns)[:list(edges.columns).index(right[0])])+1:
                             if skyline[pr2][0][0] <= current_w:
                                 dominate_counter[str((current_w,left,right))] += 1
                                 for s in skyline[pr2]:
@@ -380,22 +369,27 @@ skyline_shr, dominance_shr = Shrink_UN_MIN(attr_values,stc_attrs,nodes_df,edges_
 x = [('F', 'F'), ('F', 'M'), ('M', 'F'), ('M', 'M')]
 stc_attrs = ['gender']
 
-top_pm_stab = []
+top_stab = {}
 for xi in x:
     skyline_stab, dominance_stab = Stab_INX_MAX(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-    top_pm_stab.append([skyline_stab, dominance_stab])
+    top_stab[str(xi)] = [skyline_stab, dominance_stab]
+print('size stab', [len(i[0]) for i in top_stab.values()])
 
-top_pm_grow = []
+top_grow = {}
 for xi in x:
     skyline_grow, dominance_grow = Growth_UN_MAX(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-    top_pm_grow.append([skyline_grow, dominance_grow])
+    top_grow[str(xi)] = [skyline_grow, dominance_grow]
+print('size grow', [len(i[0]) for i in top_grow.values()])
 
-top_pm_shr = []
+top_shr = {}
 for xi in x:
     skyline_shr, dominance_shr = Shrink_UN_MIN(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-    top_pm_shr.append([skyline_shr, dominance_shr])
+    top_shr[str(xi)] = [skyline_shr, dominance_shr]
+print('size shr', [len(i[0]) for i in top_shr.values()])
 
 # 2 TIME & SIZE EXPERIMENTS FOR DBLP
+
+# DBLP
 
 edges_sliced = [edges_df.iloc[:,:6], edges_df.iloc[:,:11], edges_df.iloc[:,:16], edges_df.iloc[:,:21]]
 
@@ -419,10 +413,10 @@ for xi in x:
     res[str(xi)] = res.mean(axis=1)
 
     # if file does not exist write header 
-    if not os.path.isfile('experiments/dblp/stab_gender.csv'):
-       res.to_csv('experiments/dblp/stab_gender.csv', header='column_names')
+    if not os.path.isfile('experiments/runtime/dblp/stab_gender.csv'):
+       res.to_csv('experiments/runtime/dblp/stab_gender.csv', header='column_names')
     else: # else it exists so append without writing the header
-       res.to_csv('experiments/dblp/stab_gender.csv', mode='a', header='column_names')
+       res.to_csv('experiments/runtime/dblp/stab_gender.csv', mode='a', header='column_names')
 
 
 for xi in x:
@@ -440,10 +434,10 @@ for xi in x:
     res[str(xi)] = res.mean(axis=1)
 
     # if file does not exist write header 
-    if not os.path.isfile('experiments/dblp/grow_gender.csv'):
-       res.to_csv('experiments/dblp/grow_gender.csv', header='column_names')
+    if not os.path.isfile('experiments/runtime/dblp/grow_gender.csv'):
+       res.to_csv('experiments/runtime/dblp/grow_gender.csv', header='column_names')
     else: # else it exists so append without writing the header
-       res.to_csv('experiments/dblp/grow_gender.csv', mode='a', header='column_names')
+       res.to_csv('experiments/runtime/dblp/grow_gender.csv', mode='a', header='column_names')
 
 
 for xi in x:
@@ -461,10 +455,77 @@ for xi in x:
     res[str(xi)] = res.mean(axis=1)
 
     # if file does not exist write header 
-    if not os.path.isfile('experiments/dblp/shr_gender.csv'):
-       res.to_csv('experiments/dblp/shr_gender.csv', header='column_names')
+    if not os.path.isfile('experiments/runtime/dblp/shr_gender.csv'):
+       res.to_csv('experiments/runtime/dblp/shr_gender.csv', header='column_names')
     else: # else it exists so append without writing the header
-       res.to_csv('experiments/dblp/shr_gender.csv', mode='a', header='column_names')
+       res.to_csv('experiments/runtime/dblp/shr_gender.csv', mode='a', header='column_names')
+
+
+# Primary School & MovieLens for full dataset
+
+x = [('F', 'F'), ('F', 'M'), ('M', 'F'), ('M', 'M')]
+stc_attrs = ['gender']
+dataset = 'primary'
+dataset = 'movielens'
+
+for xi in x:
+    result = []
+    for j in range(5):
+        start_end_agg = []
+        start = time.time()
+        skyline_stab, dominance_stab = Stab_INX_MAX(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
+        end = time.time()
+        start_end_agg.append(end-start)
+        result.append(start_end_agg)
+    
+    res = pd.DataFrame(result).T
+    res[str(xi)] = res.mean(axis=1)
+
+    # if file does not exist write header 
+    if not os.path.isfile('experiments/runtime/'+dataset+'/stab_gender.csv'):
+       res.to_csv('experiments/runtime/'+dataset+'/stab_gender.csv', header='column_names')
+    else: # else it exists so append without writing the header
+       res.to_csv('experiments/runtime/'+dataset+'/stab_gender.csv', mode='a', header='column_names')
+
+
+for xi in x:
+    result = []
+    for j in range(5):
+        start_end_agg = []
+        start = time.time()
+        skyline_grow, dominance_grow = Growth_UN_MAX(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
+        end = time.time()
+        start_end_agg.append(end-start)
+        result.append(start_end_agg)
+    
+    res = pd.DataFrame(result).T
+    res[str(xi)] = res.mean(axis=1)
+
+    # if file does not exist write header 
+    if not os.path.isfile('experiments/runtime/'+dataset+'/grow_gender.csv'):
+       res.to_csv('experiments/runtime/'+dataset+'/grow_gender.csv', header='column_names')
+    else: # else it exists so append without writing the header
+       res.to_csv('experiments/runtime/'+dataset+'/grow_gender.csv', mode='a', header='column_names')
+
+
+for xi in x:
+    result = []
+    for j in range(5):
+        start_end_agg = []
+        start = time.time()
+        skyline_shr, dominance_shr = Shrink_UN_MIN(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
+        end = time.time()
+        start_end_agg.append(end-start)
+        result.append(start_end_agg)
+    
+    res = pd.DataFrame(result).T
+    res[str(xi)] = res.mean(axis=1)
+
+    # if file does not exist write header 
+    if not os.path.isfile('experiments/runtime/'+dataset+'/shr_gender.csv'):
+       res.to_csv('experiments/runtime/'+dataset+'/shr_gender.csv', header='column_names')
+    else: # else it exists so append without writing the header
+       res.to_csv('experiments/runtime/'+dataset+'/shr_gender.csv', mode='a', header='column_names')
 
 
 # =============================================================================
@@ -684,5 +745,90 @@ for xi in x:
 #                 left = [edges.columns[list(edges.columns).index(left[0])-1]]+left
 #             else:
 #                 flag = False
+#     return(skyline,dominate_counter)
+# =============================================================================
+
+
+
+# =============================================================================
+# # shrinkage (told(union) - tnew) (minimal)
+# def Shrink_UN_MIN(attr_val,stc,nodes,edges,time_inv):
+#     s = [[str(i)] for i in edges.columns[:-1]]
+#     e = [[str(i)] for i in edges.columns[1:]]
+#     intvls = list(zip(s,e))
+#     intvls = [list(i) for i in intvls]
+#     
+#     skyline = {i:[] for i in range(1, len(edges.columns))}
+#     dominate_counter = {}
+#     for left,right in intvls:
+#         min_length = len(left)
+#         flag = True
+#         while flag == True:
+#             #print('left',left,'right',right)
+#             diff,tia_diff = Diff_Static(nodes,edges,time_inv,left,right)
+#             if not diff[1].empty:
+#                 #print('diff empty?', diff[1].empty)
+#                 agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc)
+#                 if attr_val in agg_diff[1].index:
+#                     current_w = agg_diff[1].loc[attr_val,:][0]
+#                     dominate_counter[str((current_w,left,right))] = 0
+#                     pr = len(left)
+#                     #print('pr: ', pr)
+#                     while not skyline[pr] and pr >= min_length:
+#                         pr -= 1
+#                         #print('while..., pr: ', pr)
+#                         if pr < min_length:
+#                             break
+#                     if pr < min_length:
+#                         #print(pr, '>', max_length)
+#                         previous_w = 0
+#                     else:
+#                         #print(pr, '<=', max_length)
+#                         previous_w = skyline[pr][0][0]
+#                     if current_w > previous_w:
+#                         #print(current_w, '>', previous_w)
+#                         if len(left) == pr:
+#                             dominate_counter[str((current_w,left,right))] += 1
+#                             for s in skyline[pr]:
+#                                 dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
+#                             dominate_counter[str(tuple(s))] = 0
+#                         skyline[len(left)] = [[current_w,left,right]]
+#                     elif current_w == previous_w:
+#                         if len(left) == pr:
+#                             skyline.setdefault(len(left),[]).append([current_w,left,right])
+#                     else:
+#                         #print(current_w, '<=', previous_w)
+#                         for s in skyline[pr]:
+#                             dominate_counter[str(tuple(s))] += 1
+#                     # if left[-1] not reached the end
+#                     if left[-1] != list(edges.columns)[list(edges.columns).index(right[0])-1]:
+#                         pr2 = len(left)+1
+#                         while not skyline[pr2] and pr2 <= len(list(
+#                                 edges.columns)[list(edges.columns).index(left[0])
+#                                                   :list(edges.columns).index(right[0])]):
+#                             pr2 += 1
+#                             if pr2 == len(list(
+#                                     edges.columns)[list(edges.columns).index(left[0])
+#                                                       :list(edges.columns).index(right[0])+1]):
+#                                 break
+#                         if pr2 == len(list(
+#                                 edges.columns)[list(edges.columns).index(left[0])
+#                                                   :list(edges.columns).index(right[0])+1]):
+#                             break
+#                         else:
+#                             if skyline[pr2][0][0] <= current_w:
+#                                 dominate_counter[str((current_w,left,right))] += 1
+#                                 for s in skyline[pr2]:
+#                                     dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
+#                                 dominate_counter[str(tuple(s))] = 0
+#                                 skyline[pr2] = []
+#             if left[0] != edges.columns[0]:
+#                 flag = True
+#                 left = [edges.columns[list(edges.columns).index(left[0])-1]]+left
+#             else:
+#                 flag = False
+#     skyline = {i:j for i,j in skyline.items() if j}
+#     dominate_counter = {i:j for i,j in dominate_counter.items() \
+#                         if list(eval(i)) in [si for s in skyline.values() for si in s]}
 #     return(skyline,dominate_counter)
 # =============================================================================
