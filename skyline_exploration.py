@@ -832,3 +832,231 @@ for xi in x:
 #                         if list(eval(i)) in [si for s in skyline.values() for si in s]}
 #     return(skyline,dominate_counter)
 # =============================================================================
+
+
+
+
+
+# ONE-PASS
+
+# STABILITY
+
+stc_attrs = ['gender']
+attr_val = list(time_invariant_attr[stc_attrs].value_counts().index)
+attr_val = [('M'), ('F')]
+attr_val_combs = list(itertools.product(attr_val, repeat=2))
+attr_val_combs = [tuple([i[0][0],i[1][0]]) for i in attr_val_combs]
+
+c=0
+intvls = []
+for i in range(1,len(edges_df.columns)+1-c):
+    intvls.append([list(edges_df.columns[:i]), list(edges_df.columns[i:i+1])])
+    c += 1
+intvls = intvls[:-1]
+
+skyline = {j:{i:[] for i in range(1, len(edges_df.columns))} for j in attr_val_combs}
+dominate_counter = {i:{} for i in attr_val_combs}
+for left,right in intvls:
+    max_length = len(left)
+    while len(left) >= 1:
+        current_w = {}
+        previous_w = {}
+        #print(left)
+        inx,tia_inx = Intersection_Static(nodes_df,edges_df,time_invariant_attr,left+right)
+        if not inx[1].empty:
+            agg_inx = Aggregate_Static_Dist(inx,tia_inx,stc_attrs)
+            for comb in attr_val_combs:
+                if comb in agg_inx[1].index:
+                    current_w[comb] = agg_inx[1].loc[comb,:][0]
+                    dominate_counter[comb][str((current_w[comb],left,right))] = 0
+                    pr = len(left)
+                    while not skyline[comb][pr] and pr <= max_length:
+                        pr += 1
+                        #print('while..., pr: ', pr)
+                        if pr > max_length:
+                            break
+                    if pr > max_length:
+                        previous_w[comb] = 0
+                    else:
+                        previous_w[comb] = skyline[comb][pr][0][0]
+                    if current_w[comb] > previous_w[comb]:
+                        if len(left) == pr:
+                            dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                            for s in skyline[comb][pr]:
+                                dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                            #del dominate_counter[str(tuple(s))]
+                            dominate_counter[comb][str(tuple(s))] = 0
+                        skyline[comb][len(left)] = [[current_w[comb],left,right]]
+                    elif current_w[comb] == previous_w[comb]:
+                        if len(left) == pr:
+                            skyline[comb].setdefault(len(left),[]).append([current_w[comb],left,right])
+                    else:
+                        for s in skyline[comb][pr]:
+                            dominate_counter[comb][str(tuple(s))] += 1
+                    if len(left) > 1:
+                        pr2 = len(left)-1
+                        while not skyline[comb][pr2] and pr2 >= 1:
+                            pr2 -= 1
+                            if pr2 == 0:
+                                break
+                        if pr2 > 0:
+                            if skyline[comb][pr2][0][0] <= current_w[comb]:
+                                dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                                for s in skyline[comb][pr2]:
+                                    dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                                #del dominate_counter[str(tuple(s))]
+                                dominate_counter[comb][str(tuple(s))] = 0
+                                skyline[comb][pr2] = []            
+        left = left[1:]
+for comb in attr_val_combs:
+    skyline[comb] = {i:j for i,j in skyline[comb].items() if j}
+    dominate_counter[comb] = {i:j for i,j in dominate_counter[comb].items() \
+                    if list(eval(i)) in [si for s in skyline[comb].values() for si in s]}
+
+
+# GROWTH
+
+stc_attrs = ['gender']
+attr_val = list(time_invariant_attr[stc_attrs].value_counts().index)
+attr_val = [('M'), ('F')]
+attr_val_combs = list(itertools.product(attr_val, repeat=2))
+attr_val_combs = [tuple([i[0][0],i[1][0]]) for i in attr_val_combs]
+
+c=0
+intvls = []
+for i in range(1,len(edges_df.columns)+1-c):
+    intvls.append([list(edges_df.columns[:i]), list(edges_df.columns[i:i+1])])
+    c += 1
+intvls = intvls[:-1]
+
+skyline = {j:{i:[] for i in range(1, len(edges_df.columns))} for j in attr_val_combs}
+dominate_counter = {i:{} for i in attr_val_combs}
+for left,right in intvls:
+    max_length = len(left)
+    while len(left) >= 1:
+        current_w = {}
+        previous_w = {}
+        diff,tia_diff = Diff_Static(nodes_df,edges_df,time_invariant_attr,right,left)
+        if not diff[1].empty:
+            agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc_attrs)
+            for comb in attr_val_combs:
+                if comb in agg_diff[1].index:
+                    current_w[comb] = agg_diff[1].loc[comb,:][0]
+                    dominate_counter[comb][str((current_w[comb],left,right))] = 0
+                    pr = len(left)
+                    while not skyline[comb][pr] and pr <= max_length:
+                        pr += 1
+                        if pr > max_length:
+                            break
+                    if pr > max_length:
+                        previous_w[comb] = 0
+                    else:
+                        previous_w[comb] = skyline[comb][pr][0][0]
+                    if current_w[comb] > previous_w[comb]:
+                        if len(left) == pr:
+                            dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                            for s in skyline[comb][pr]:
+                                dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                            #del dominate_counter[str(tuple(s))]
+                            dominate_counter[comb][str(tuple(s))] = 0
+                        skyline[comb][len(left)] = [[current_w[comb],left,right]]
+                    elif current_w[comb] == previous_w[comb]:
+                        if len(left) == pr:
+                            skyline[comb].setdefault(len(left),[]).append([current_w[comb],left,right])
+                    else:
+                        for s in skyline[comb][pr]:
+                            dominate_counter[comb][str(tuple(s))] += 1
+                    if len(left) > 1:
+                        pr2 = len(left)-1
+                        while not skyline[comb][pr2] and pr2 >= 1:
+                            pr2 -= 1
+                            if pr2 == 0:
+                                break
+                        if pr2 > 0:
+                            if skyline[comb][pr2][0][0] <= current_w[comb]:
+                                dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                                for s in skyline[comb][pr2]:
+                                    dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                                #del dominate_counter[str(tuple(s))]
+                                dominate_counter[comb][str(tuple(s))] = 0
+                                skyline[comb][pr2] = []            
+        left = left[1:]
+for comb in attr_val_combs:
+    skyline[comb] = {i:j for i,j in skyline[comb].items() if j}
+    dominate_counter[comb] = {i:j for i,j in dominate_counter[comb].items() \
+                    if list(eval(i)) in [si for s in skyline[comb].values() for si in s]}
+
+
+# SHRINKAGE
+
+stc_attrs = ['gender']
+attr_val = list(time_invariant_attr[stc_attrs].value_counts().index)
+attr_val = [('M'), ('F')]
+attr_val_combs = list(itertools.product(attr_val, repeat=2))
+attr_val_combs = [tuple([i[0][0],i[1][0]]) for i in attr_val_combs]
+
+s = [[str(i)] for i in edges_df.columns[:-1]]
+e = [[str(i)] for i in edges_df.columns[1:]]
+intvls = list(zip(s,e))
+intvls = [list(i) for i in intvls]
+
+skyline = {j:{i:[] for i in range(1, len(edges_df.columns))} for j in attr_val_combs}
+dominate_counter = {i:{} for i in attr_val_combs}
+
+for left,right in intvls:
+    min_length = len(left)
+    flag = True
+    while flag == True:
+        current_w = {}
+        previous_w = {}
+        diff,tia_diff = Diff_Static(nodes_df,edges_df,time_invariant_attr,left,right)
+        if not diff[1].empty:
+            agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc_attrs)
+            for comb in attr_val_combs:
+                if comb in agg_diff[1].index:
+                    current_w[comb]= agg_diff[1].loc[comb,:][0]
+                    dominate_counter[comb][str((current_w[comb],left,right))] = 0
+                    pr = len(left)
+                    while not skyline[comb][pr] and pr >= min_length:
+                        pr -= 1
+                        if pr < min_length:
+                            break
+                    if pr < min_length:
+                        previous_w[comb] = 0
+                    else:
+                        previous_w[comb] = skyline[comb][pr][0][0]
+                    if current_w[comb] > previous_w[comb]:
+                        if len(left) == pr:
+                            dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                            for s in skyline[comb][pr]:
+                                dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                            dominate_counter[comb][str(tuple(s))] = 0
+                        skyline[comb][len(left)] = [[current_w[comb],left,right]]
+                    elif current_w[comb] == previous_w[comb]:
+                        if len(left) == pr:
+                            skyline[comb].setdefault(len(left),[]).append([current_w[comb],left,right])
+                    else:
+                        for s in skyline[comb][pr]:
+                            dominate_counter[comb][str(tuple(s))] += 1
+                    if left[0] != edges_df.columns[0]:
+                        pr2 = len(left)+1
+                        while not skyline[comb][pr2] and pr2 <= len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])]):
+                            pr2 += 1
+                            if pr2 == len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
+                                break
+                        if pr2 < len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
+                            if skyline[comb][pr2][0][0] <= current_w[comb]:
+                                dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                                for s in skyline[comb][pr2]:
+                                    dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                                dominate_counter[comb][str(tuple(s))] = 0
+                                skyline[comb][pr2] = []
+        if left[0] != edges_df.columns[0]:
+            flag = True
+            left = [edges_df.columns[list(edges_df.columns).index(left[0])-1]]+left
+        else:
+            flag = False
+for comb in attr_val_combs:
+    skyline[comb] = {i:j for i,j in skyline[comb].items() if j}
+    dominate_counter[comb] = {i:j for i,j in dominate_counter[comb].items() \
+                        if list(eval(i)) in [si for s in skyline[comb].values() for si in s]}
