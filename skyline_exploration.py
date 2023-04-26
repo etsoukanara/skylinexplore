@@ -105,7 +105,7 @@ interval = [i for i in edges_df.columns]
 #                     '25-34', '35-44', '45-49', '50-55', '56+'], [1, 18, 25, 35, 45, 50, 56], inplace=True)
 # =============================================================================
 
-# school dataset
+# primary school dataset
 edges_df = pd.read_csv('C:/Users/Lila/Desktop/PROJECT_2.2_EXT/experiments/school_dataset/edges.csv', sep=' ', index_col=[0,1])
 nodes_df = pd.read_csv('C:/Users/Lila/Desktop/PROJECT_2.2_EXT/experiments/school_dataset/nodes.csv', sep=' ', index_col=0)
 time_invariant_attr = pd.read_csv('C:/Users/Lila/Desktop/PROJECT_2.2_EXT/experiments/school_dataset/time_invariant_attr.csv', sep=' ', index_col=0)
@@ -209,6 +209,90 @@ def Stab_INX_MAX(attr_val,stc,nodes,edges,time_inv):
     return(skyline,dominate_counter)
 
 skyline_stab, dominance_stab = Stab_INX_MAX(attr_values,stc_attrs,nodes_df,edges_df,time_invariant_attr)
+
+
+# Stability (told(un)&tnew) (minimal)
+
+attr_values = ('F', 'F')
+stc_attrs = ['gender']
+
+
+#def Stab_UN_MIN(attr_val,stc,nodes,edges,time_inv):
+    
+def Intersection_Static_UN(nodesdf,edgesdf,tia,intvl):
+    nodes_u = nodesdf[intvl[0]][nodesdf[intvl[0]].any(axis=1)]
+    n = pd.merge(nodes_u, nodesdf.loc[:,intvl[1]], left_index=True, right_index=True)
+    e = edgesdf[intvl[0]+intvl[1]][edgesdf[intvl[0]].any(axis=1)]
+    e = e[e.loc[:,intvl[1]]==1]
+    tiainx = tia[tia.index.isin(n.index)]
+    ne = [n,e]
+    return(ne,tiainx)
+
+def Stab_INX_U_MIN(attr_val,stc,nodes,edges,time_inv):
+    s = [[str(i)] for i in edges_df.columns[:-1]]
+    e = [[str(i)] for i in edges_df.columns[1:]]
+    intvls = list(zip(s,e))
+    intvls = [list(i) for i in intvls]
+
+    skyline = {i:[] for i in range(1, len(edges_df.columns))}
+    dominate_counter = {}
+    for left,right in intvls:
+        min_length = len(left)
+        flag = True
+        while flag == True:
+            inx,tia_inx = Intersection_Static_UN(nodes_df,edges_df,time_invariant_attr,[left,right])
+            if not inx[1].empty:
+                agg_inx = Aggregate_Static_Dist(inx,tia_inx,stc_attrs)
+                if attr_values in agg_inx[1].index:
+                    current_w = agg_inx[1].loc[attr_values,:][0]
+                    dominate_counter[str((current_w,left,right))] = 0
+                    pr = len(left)
+                    while not skyline[pr] and pr >= min_length:
+                        pr -= 1
+                        if pr < min_length:
+                            break
+                    if pr < min_length:
+                        previous_w = 0
+                    else:
+                        previous_w = skyline[pr][0][0]
+                    if current_w > previous_w:
+                        if len(left) == pr:
+                            dominate_counter[str((current_w,left,right))] += 1
+                            for s in skyline[pr]:
+                                dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
+                            dominate_counter[str(tuple(s))] = 0
+                        skyline[len(left)] = [[current_w,left,right]]
+                    elif current_w == previous_w:
+                        if len(left) == pr:
+                            skyline.setdefault(len(left),[]).append([current_w,left,right])
+                    else:
+                        for s in skyline[pr]:
+                            dominate_counter[str(tuple(s))] += 1
+                    if left[0] != edges_df.columns[0]:
+                        pr2 = len(left)+1
+                        while not skyline[pr2] and pr2 <= len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])]):
+                            pr2 += 1
+                            if pr2 == len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
+                                break
+                        if pr2 < len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
+                            if skyline[pr2][0][0] <= current_w:
+                                dominate_counter[str((current_w,left,right))] += 1
+                                for s in skyline[pr2]:
+                                    dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
+                                dominate_counter[str(tuple(s))] = 0
+                                skyline[pr2] = []
+            if left[0] != edges_df.columns[0]:
+                flag = True
+                left = [edges_df.columns[list(edges_df.columns).index(left[0])-1]]+left
+            else:
+                flag = False
+    skyline = {i:j for i,j in skyline.items() if j}
+    dominate_counter = {i:j for i,j in dominate_counter.items() \
+                        if list(eval(i)) in [si for s in skyline.values() for si in s]}
+
+    return(skyline,dominate_counter)
+
+skyline_stabU, dominance_stabU = Stab_INX_U_MIN(attr_values,stc_attrs,nodes_df,edges_df,time_invariant_attr)
                 
 
 # growth (tnew - told(union)) (maximal)
@@ -226,7 +310,6 @@ def Growth_UN_MAX(attr_val,stc,nodes,edges,time_inv):
     for left,right in intvls:
         max_length = len(left)
         while len(left) >= 1:
-            #print(left)
             diff,tia_diff = Diff_Static(nodes,edges,time_inv,right,left)
             if not diff[1].empty:
                 agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc)
@@ -234,20 +317,15 @@ def Growth_UN_MAX(attr_val,stc,nodes,edges,time_inv):
                     current_w = agg_diff[1].loc[attr_val,:][0]
                     dominate_counter[str((current_w,left,right))] = 0
                     pr = len(left)
-                    #print('pr: ', pr)
                     while not skyline[pr] and pr <= max_length:
                         pr += 1
-                        #print('while..., pr: ', pr)
                         if pr > max_length:
                             break
                     if pr > max_length:
-                        #print(pr, '>', max_length)
                         previous_w = 0
                     else:
-                        #print(pr, '<=', max_length)
                         previous_w = skyline[pr][0][0]
                     if current_w > previous_w:
-                        #print(current_w, '>', previous_w)
                         if len(left) == pr:
                             dominate_counter[str((current_w,left,right))] += 1
                             for s in skyline[pr]:
@@ -258,7 +336,6 @@ def Growth_UN_MAX(attr_val,stc,nodes,edges,time_inv):
                         if len(left) == pr:
                             skyline.setdefault(len(left),[]).append([current_w,left,right])
                     else:
-                        #print(current_w, '<=', previous_w)
                         for s in skyline[pr]:
                             dominate_counter[str(tuple(s))] += 1
                     if len(left) > 1:
@@ -297,29 +374,22 @@ def Shrink_UN_MIN(attr_val,stc,nodes,edges,time_inv):
         min_length = len(left)
         flag = True
         while flag == True:
-            #print('left',left,'right',right)
             diff,tia_diff = Diff_Static(nodes,edges,time_inv,left,right)
             if not diff[1].empty:
-                #print('diff empty?', diff[1].empty)
                 agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc)
                 if attr_val in agg_diff[1].index:
                     current_w = agg_diff[1].loc[attr_val,:][0]
                     dominate_counter[str((current_w,left,right))] = 0
                     pr = len(left)
-                    #print('pr: ', pr)
                     while not skyline[pr] and pr >= min_length:
                         pr -= 1
-                        #print('while..., pr: ', pr)
                         if pr < min_length:
                             break
                     if pr < min_length:
-                        #print(pr, '>', max_length)
                         previous_w = 0
                     else:
-                        #print(pr, '<=', max_length)
                         previous_w = skyline[pr][0][0]
                     if current_w > previous_w:
-                        #print(current_w, '>', previous_w)
                         if len(left) == pr:
                             dominate_counter[str((current_w,left,right))] += 1
                             for s in skyline[pr]:
@@ -330,12 +400,9 @@ def Shrink_UN_MIN(attr_val,stc,nodes,edges,time_inv):
                         if len(left) == pr:
                             skyline.setdefault(len(left),[]).append([current_w,left,right])
                     else:
-                        #print(current_w, '<=', previous_w)
                         for s in skyline[pr]:
                             dominate_counter[str(tuple(s))] += 1
-                    # if left[0] not reached the end --> left != edges.columns[0]
                     if left[0] != edges.columns[0]:
-                    #if left[-1] != list(edges.columns)[list(edges.columns).index(right[0])-1]:
                         pr2 = len(left)+1
                         while not skyline[pr2] and pr2 <= len(list(edges.columns)[:list(edges.columns).index(right[0])]):
                             pr2 += 1
@@ -360,6 +427,19 @@ def Shrink_UN_MIN(attr_val,stc,nodes,edges,time_inv):
 
 skyline_shr, dominance_shr = Shrink_UN_MIN(attr_values,stc_attrs,nodes_df,edges_df,time_invariant_attr)
 
+
+############################
+
+# top-k
+
+k = 3
+dom_val = sorted([i[1] for i in dominate_counter.items()])[::-1][:k]
+
+top={}
+for k,val in dominate_counter.items():
+    if val in dom_val:
+        top[k] = val
+    
 
 ############################
 
@@ -607,456 +687,352 @@ for xi in x:
 # =============================================================================
 
 
-
-# =============================================================================
-# def Growth_UN_MAX(attr_val,stc,nodes,edges,time_inv):
-#     c=0
-#     intvls = []
-#     for i in range(1,len(edges.columns)+1-c):
-#         intvls.append([list(edges.columns[:i]), list(edges.columns[i:i+1])])
-#         c += 1
-#     intvls = intvls[:-1]
-#     
-#     skyline = {i:[] for i in range(1, len(edges.columns))}
-#     dominate_counter = {}
-#     for left,right in intvls:
-#         max_length = len(left)
-#         while len(left) >= 1:
-#             #print(left)
-#             diff,tia_diff = Diff_Static(nodes,edges,time_inv,right,left)
-#             if not diff[1].empty:
-#                 agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc)
-#                 if attr_val in agg_diff[1].index:
-#                     current_w = agg_diff[1].loc[attr_val,:][0]
-#                     dominate_counter[str((current_w,left,right))] = 0
-#                     pr = len(left)
-#                     #print('pr: ', pr)
-#                     while not skyline[pr] and pr <= max_length:
-#                         pr += 1
-#                         #print('while..., pr: ', pr)
-#                         if pr > max_length:
-#                             break
-#                     if pr > max_length:
-#                         #print(pr, '>', max_length)
-#                         previous_w = 0
-#                     else:
-#                         #print(pr, '<=', max_length)
-#                         previous_w = skyline[pr][0][0]
-#                     if current_w > previous_w:
-#                         #print(current_w, '>', previous_w)
-#                         if len(left) == pr:
-#                             dominate_counter[str((current_w,left,right))] += 1
-#                             dominate_counter[str((current_w,left,right))] += len(skyline[pr])
-#                         skyline[len(left)] = [[current_w,left,right]]
-#                     elif current_w == previous_w:
-#                         if len(left) == pr:
-#                             skyline.setdefault(len(left),[]).append([current_w,left,right])
-#                     else:
-#                         #print(current_w, '<=', previous_w)
-#                         for s in skyline[pr]:
-#                             dominate_counter[str(tuple(s))] += 1
-#                     if len(left) > 1:
-#                         pr2 = len(left)-1
-#                         while not skyline[pr2] and pr2 >= 1:
-#                             pr2 -= 1
-#                             if pr2 == 0:
-#                                 break
-#                         if pr2 == 0:
-#                             break
-#                         else:
-#                             if skyline[pr2][0][0] <= current_w:
-#                                 dominate_counter[str((current_w,left,right))] += 1
-#                                 dominate_counter[str((current_w,left,right))] += len(skyline[pr2])
-#                                 skyline[pr2] = []
-#             left = left[1:]
-#     return(skyline,dominate_counter)
-# =============================================================================
-
-
-# =============================================================================
-# def Shrink_UN_MIN(attr_val,stc,nodes,edges,time_inv):
-#     s = [[str(i)] for i in edges.columns[:-1]]
-#     e = [[str(i)] for i in edges.columns[1:]]
-#     intvls = list(zip(s,e))
-#     intvls = [list(i) for i in intvls]
-#     
-#     skyline = {i:[] for i in range(1, len(edges.columns))}
-#     dominate_counter = {}
-#     for left,right in intvls:
-#         min_length = len(left)
-#         flag = True
-#         while flag == True:
-#             #print('left',left,'right',right)
-#             diff,tia_diff = Diff_Static(nodes,edges,time_inv,left,right)
-#             if not diff[1].empty:
-#                 #print('diff empty?', diff[1].empty)
-#                 agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc)
-#                 if attr_val in agg_diff[1].index:
-#                     current_w = agg_diff[1].loc[attr_val,:][0]
-#                     dominate_counter[str((current_w,left,right))] = 0
-#                     pr = len(left)
-#                     #print('pr: ', pr)
-#                     while not skyline[pr] and pr >= min_length:
-#                         pr -= 1
-#                         #print('while..., pr: ', pr)
-#                         if pr < min_length:
-#                             break
-#                     if pr < min_length:
-#                         #print(pr, '>', max_length)
-#                         previous_w = 0
-#                     else:
-#                         #print(pr, '<=', max_length)
-#                         previous_w = skyline[pr][0][0]
-#                     if current_w > previous_w:
-#                         #print(current_w, '>', previous_w)
-#                         if len(left) == pr:
-#                             dominate_counter[str((current_w,left,right))] += 1
-#                             dominate_counter[str((current_w,left,right))] += len(skyline[pr])
-#                         skyline[len(left)] = [[current_w,left,right]]
-#                     elif current_w == previous_w:
-#                         if len(left) == pr:
-#                             skyline.setdefault(len(left),[]).append([current_w,left,right])
-#                     else:
-#                         #print(current_w, '<=', previous_w)
-#                         for s in skyline[pr]:
-#                             dominate_counter[str(tuple(s))] += 1
-#                     # if left[-1] not reached the end --> left != right - 1
-#                     if left[-1] != list(edges.columns)[list(edges.columns).index(right[0])-1]:
-#                         pr2 = len(left)+1
-#                         while not skyline[pr2] and pr2 <= len(list(
-#                                 edges.columns)[list(edges.columns).index(left[0])
-#                                                   :list(edges.columns).index(right[0])]):
-#                             pr2 += 1
-#                             if pr2 == len(list(
-#                                     edges.columns)[list(edges.columns).index(left[0])
-#                                                       :list(edges.columns).index(right[0])+1]):
-#                                 break
-#                         if pr2 == len(list(
-#                                 edges.columns)[list(edges.columns).index(left[0])
-#                                                   :list(edges.columns).index(right[0])+1]):
-#                             break
-#                         else:
-#                             if skyline[pr2][0][0] <= current_w:
-#                                 dominate_counter[str((current_w,left,right))] += 1
-#                                 dominate_counter[str((current_w,left,right))] += len(skyline[pr2])
-#                                 skyline[pr2] = []
-#             if left[0] != edges.columns[0]:
-#                 flag = True
-#                 left = [edges.columns[list(edges.columns).index(left[0])-1]]+left
-#             else:
-#                 flag = False
-#     return(skyline,dominate_counter)
-# =============================================================================
-
-
-
-# =============================================================================
-# # shrinkage (told(union) - tnew) (minimal)
-# def Shrink_UN_MIN(attr_val,stc,nodes,edges,time_inv):
-#     s = [[str(i)] for i in edges.columns[:-1]]
-#     e = [[str(i)] for i in edges.columns[1:]]
-#     intvls = list(zip(s,e))
-#     intvls = [list(i) for i in intvls]
-#     
-#     skyline = {i:[] for i in range(1, len(edges.columns))}
-#     dominate_counter = {}
-#     for left,right in intvls:
-#         min_length = len(left)
-#         flag = True
-#         while flag == True:
-#             #print('left',left,'right',right)
-#             diff,tia_diff = Diff_Static(nodes,edges,time_inv,left,right)
-#             if not diff[1].empty:
-#                 #print('diff empty?', diff[1].empty)
-#                 agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc)
-#                 if attr_val in agg_diff[1].index:
-#                     current_w = agg_diff[1].loc[attr_val,:][0]
-#                     dominate_counter[str((current_w,left,right))] = 0
-#                     pr = len(left)
-#                     #print('pr: ', pr)
-#                     while not skyline[pr] and pr >= min_length:
-#                         pr -= 1
-#                         #print('while..., pr: ', pr)
-#                         if pr < min_length:
-#                             break
-#                     if pr < min_length:
-#                         #print(pr, '>', max_length)
-#                         previous_w = 0
-#                     else:
-#                         #print(pr, '<=', max_length)
-#                         previous_w = skyline[pr][0][0]
-#                     if current_w > previous_w:
-#                         #print(current_w, '>', previous_w)
-#                         if len(left) == pr:
-#                             dominate_counter[str((current_w,left,right))] += 1
-#                             for s in skyline[pr]:
-#                                 dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-#                             dominate_counter[str(tuple(s))] = 0
-#                         skyline[len(left)] = [[current_w,left,right]]
-#                     elif current_w == previous_w:
-#                         if len(left) == pr:
-#                             skyline.setdefault(len(left),[]).append([current_w,left,right])
-#                     else:
-#                         #print(current_w, '<=', previous_w)
-#                         for s in skyline[pr]:
-#                             dominate_counter[str(tuple(s))] += 1
-#                     # if left[-1] not reached the end
-#                     if left[-1] != list(edges.columns)[list(edges.columns).index(right[0])-1]:
-#                         pr2 = len(left)+1
-#                         while not skyline[pr2] and pr2 <= len(list(
-#                                 edges.columns)[list(edges.columns).index(left[0])
-#                                                   :list(edges.columns).index(right[0])]):
-#                             pr2 += 1
-#                             if pr2 == len(list(
-#                                     edges.columns)[list(edges.columns).index(left[0])
-#                                                       :list(edges.columns).index(right[0])+1]):
-#                                 break
-#                         if pr2 == len(list(
-#                                 edges.columns)[list(edges.columns).index(left[0])
-#                                                   :list(edges.columns).index(right[0])+1]):
-#                             break
-#                         else:
-#                             if skyline[pr2][0][0] <= current_w:
-#                                 dominate_counter[str((current_w,left,right))] += 1
-#                                 for s in skyline[pr2]:
-#                                     dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-#                                 dominate_counter[str(tuple(s))] = 0
-#                                 skyline[pr2] = []
-#             if left[0] != edges.columns[0]:
-#                 flag = True
-#                 left = [edges.columns[list(edges.columns).index(left[0])-1]]+left
-#             else:
-#                 flag = False
-#     skyline = {i:j for i,j in skyline.items() if j}
-#     dominate_counter = {i:j for i,j in dominate_counter.items() \
-#                         if list(eval(i)) in [si for s in skyline.values() for si in s]}
-#     return(skyline,dominate_counter)
-# =============================================================================
-
-
-
-
-
 # ONE-PASS
 
 # STABILITY
 
-stc_attrs = ['gender']
-attr_val = list(time_invariant_attr[stc_attrs].value_counts().index)
-attr_val = [('M'), ('F')]
-attr_val_combs = list(itertools.product(attr_val, repeat=2))
-attr_val_combs = [tuple([i[0][0],i[1][0]]) for i in attr_val_combs]
-
-c=0
-intvls = []
-for i in range(1,len(edges_df.columns)+1-c):
-    intvls.append([list(edges_df.columns[:i]), list(edges_df.columns[i:i+1])])
-    c += 1
-intvls = intvls[:-1]
-
-skyline = {j:{i:[] for i in range(1, len(edges_df.columns))} for j in attr_val_combs}
-dominate_counter = {i:{} for i in attr_val_combs}
-for left,right in intvls:
-    max_length = len(left)
-    while len(left) >= 1:
-        current_w = {}
-        previous_w = {}
-        #print(left)
-        inx,tia_inx = Intersection_Static(nodes_df,edges_df,time_invariant_attr,left+right)
-        if not inx[1].empty:
-            agg_inx = Aggregate_Static_Dist(inx,tia_inx,stc_attrs)
-            for comb in attr_val_combs:
-                if comb in agg_inx[1].index:
-                    current_w[comb] = agg_inx[1].loc[comb,:][0]
-                    dominate_counter[comb][str((current_w[comb],left,right))] = 0
-                    pr = len(left)
-                    while not skyline[comb][pr] and pr <= max_length:
-                        pr += 1
-                        #print('while..., pr: ', pr)
-                        if pr > max_length:
-                            break
-                    if pr > max_length:
-                        previous_w[comb] = 0
-                    else:
-                        previous_w[comb] = skyline[comb][pr][0][0]
-                    if current_w[comb] > previous_w[comb]:
-                        if len(left) == pr:
-                            dominate_counter[comb][str((current_w[comb],left,right))] += 1
-                            for s in skyline[comb][pr]:
-                                dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
-                            #del dominate_counter[str(tuple(s))]
-                            dominate_counter[comb][str(tuple(s))] = 0
-                        skyline[comb][len(left)] = [[current_w[comb],left,right]]
-                    elif current_w[comb] == previous_w[comb]:
-                        if len(left) == pr:
-                            skyline[comb].setdefault(len(left),[]).append([current_w[comb],left,right])
-                    else:
-                        for s in skyline[comb][pr]:
-                            dominate_counter[comb][str(tuple(s))] += 1
-                    if len(left) > 1:
-                        pr2 = len(left)-1
-                        while not skyline[comb][pr2] and pr2 >= 1:
-                            pr2 -= 1
-                            if pr2 == 0:
+def Stab_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr):
+    c=0
+    intvls = []
+    for i in range(1,len(edges_df.columns)+1-c):
+        intvls.append([list(edges_df.columns[:i]), list(edges_df.columns[i:i+1])])
+        c += 1
+    intvls = intvls[:-1]
+    
+    skyline = {j:{i:[] for i in range(1, len(edges_df.columns))} for j in attr_val_combs}
+    dominate_counter = {i:{} for i in attr_val_combs}
+    for left,right in intvls:
+        max_length = len(left)
+        while len(left) >= 1:
+            current_w = {}
+            previous_w = {}
+            #print(left)
+            inx,tia_inx = Intersection_Static(nodes_df,edges_df,time_invariant_attr,left+right)
+            if not inx[1].empty:
+                agg_inx = Aggregate_Static_Dist(inx,tia_inx,stc_attrs)
+                for comb in attr_val_combs:
+                    if comb in agg_inx[1].index:
+                        current_w[comb] = agg_inx[1].loc[comb,:][0]
+                        dominate_counter[comb][str((current_w[comb],left,right))] = 0
+                        pr = len(left)
+                        while not skyline[comb][pr] and pr <= max_length:
+                            pr += 1
+                            #print('while..., pr: ', pr)
+                            if pr > max_length:
                                 break
-                        if pr2 > 0:
-                            if skyline[comb][pr2][0][0] <= current_w[comb]:
+                        if pr > max_length:
+                            previous_w[comb] = 0
+                        else:
+                            previous_w[comb] = skyline[comb][pr][0][0]
+                        if current_w[comb] > previous_w[comb]:
+                            if len(left) == pr:
                                 dominate_counter[comb][str((current_w[comb],left,right))] += 1
-                                for s in skyline[comb][pr2]:
+                                for s in skyline[comb][pr]:
                                     dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
                                 #del dominate_counter[str(tuple(s))]
                                 dominate_counter[comb][str(tuple(s))] = 0
-                                skyline[comb][pr2] = []            
-        left = left[1:]
-for comb in attr_val_combs:
-    skyline[comb] = {i:j for i,j in skyline[comb].items() if j}
-    dominate_counter[comb] = {i:j for i,j in dominate_counter[comb].items() \
-                    if list(eval(i)) in [si for s in skyline[comb].values() for si in s]}
+                            skyline[comb][len(left)] = [[current_w[comb],left,right]]
+                        elif current_w[comb] == previous_w[comb]:
+                            if len(left) == pr:
+                                skyline[comb].setdefault(len(left),[]).append([current_w[comb],left,right])
+                        else:
+                            for s in skyline[comb][pr]:
+                                dominate_counter[comb][str(tuple(s))] += 1
+                        if len(left) > 1:
+                            pr2 = len(left)-1
+                            while not skyline[comb][pr2] and pr2 >= 1:
+                                pr2 -= 1
+                                if pr2 == 0:
+                                    break
+                            if pr2 > 0:
+                                if skyline[comb][pr2][0][0] <= current_w[comb]:
+                                    dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                                    for s in skyline[comb][pr2]:
+                                        dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                                    #del dominate_counter[str(tuple(s))]
+                                    dominate_counter[comb][str(tuple(s))] = 0
+                                    skyline[comb][pr2] = []            
+            left = left[1:]
+    for comb in attr_val_combs:
+        skyline[comb] = {i:j for i,j in skyline[comb].items() if j}
+        dominate_counter[comb] = {i:j for i,j in dominate_counter[comb].items() \
+                        if list(eval(i)) in [si for s in skyline[comb].values() for si in s]}
+    return(skyline,dominate_counter)
 
 
 # GROWTH
 
-stc_attrs = ['gender']
-attr_val = list(time_invariant_attr[stc_attrs].value_counts().index)
-attr_val = [('M'), ('F')]
-attr_val_combs = list(itertools.product(attr_val, repeat=2))
-attr_val_combs = [tuple([i[0][0],i[1][0]]) for i in attr_val_combs]
-
-c=0
-intvls = []
-for i in range(1,len(edges_df.columns)+1-c):
-    intvls.append([list(edges_df.columns[:i]), list(edges_df.columns[i:i+1])])
-    c += 1
-intvls = intvls[:-1]
-
-skyline = {j:{i:[] for i in range(1, len(edges_df.columns))} for j in attr_val_combs}
-dominate_counter = {i:{} for i in attr_val_combs}
-for left,right in intvls:
-    max_length = len(left)
-    while len(left) >= 1:
-        current_w = {}
-        previous_w = {}
-        diff,tia_diff = Diff_Static(nodes_df,edges_df,time_invariant_attr,right,left)
-        if not diff[1].empty:
-            agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc_attrs)
-            for comb in attr_val_combs:
-                if comb in agg_diff[1].index:
-                    current_w[comb] = agg_diff[1].loc[comb,:][0]
-                    dominate_counter[comb][str((current_w[comb],left,right))] = 0
-                    pr = len(left)
-                    while not skyline[comb][pr] and pr <= max_length:
-                        pr += 1
-                        if pr > max_length:
-                            break
-                    if pr > max_length:
-                        previous_w[comb] = 0
-                    else:
-                        previous_w[comb] = skyline[comb][pr][0][0]
-                    if current_w[comb] > previous_w[comb]:
-                        if len(left) == pr:
-                            dominate_counter[comb][str((current_w[comb],left,right))] += 1
-                            for s in skyline[comb][pr]:
-                                dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
-                            #del dominate_counter[str(tuple(s))]
-                            dominate_counter[comb][str(tuple(s))] = 0
-                        skyline[comb][len(left)] = [[current_w[comb],left,right]]
-                    elif current_w[comb] == previous_w[comb]:
-                        if len(left) == pr:
-                            skyline[comb].setdefault(len(left),[]).append([current_w[comb],left,right])
-                    else:
-                        for s in skyline[comb][pr]:
-                            dominate_counter[comb][str(tuple(s))] += 1
-                    if len(left) > 1:
-                        pr2 = len(left)-1
-                        while not skyline[comb][pr2] and pr2 >= 1:
-                            pr2 -= 1
-                            if pr2 == 0:
+def Grow_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr):
+    c=0
+    intvls = []
+    for i in range(1,len(edges_df.columns)+1-c):
+        intvls.append([list(edges_df.columns[:i]), list(edges_df.columns[i:i+1])])
+        c += 1
+    intvls = intvls[:-1]
+    
+    skyline = {j:{i:[] for i in range(1, len(edges_df.columns))} for j in attr_val_combs}
+    dominate_counter = {i:{} for i in attr_val_combs}
+    for left,right in intvls:
+        max_length = len(left)
+        while len(left) >= 1:
+            current_w = {}
+            previous_w = {}
+            diff,tia_diff = Diff_Static(nodes_df,edges_df,time_invariant_attr,right,left)
+            if not diff[1].empty:
+                agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc_attrs)
+                for comb in attr_val_combs:
+                    if comb in agg_diff[1].index:
+                        current_w[comb] = agg_diff[1].loc[comb,:][0]
+                        dominate_counter[comb][str((current_w[comb],left,right))] = 0
+                        pr = len(left)
+                        while not skyline[comb][pr] and pr <= max_length:
+                            pr += 1
+                            if pr > max_length:
                                 break
-                        if pr2 > 0:
-                            if skyline[comb][pr2][0][0] <= current_w[comb]:
+                        if pr > max_length:
+                            previous_w[comb] = 0
+                        else:
+                            previous_w[comb] = skyline[comb][pr][0][0]
+                        if current_w[comb] > previous_w[comb]:
+                            if len(left) == pr:
                                 dominate_counter[comb][str((current_w[comb],left,right))] += 1
-                                for s in skyline[comb][pr2]:
+                                for s in skyline[comb][pr]:
                                     dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
                                 #del dominate_counter[str(tuple(s))]
                                 dominate_counter[comb][str(tuple(s))] = 0
-                                skyline[comb][pr2] = []            
-        left = left[1:]
-for comb in attr_val_combs:
-    skyline[comb] = {i:j for i,j in skyline[comb].items() if j}
-    dominate_counter[comb] = {i:j for i,j in dominate_counter[comb].items() \
-                    if list(eval(i)) in [si for s in skyline[comb].values() for si in s]}
+                            skyline[comb][len(left)] = [[current_w[comb],left,right]]
+                        elif current_w[comb] == previous_w[comb]:
+                            if len(left) == pr:
+                                skyline[comb].setdefault(len(left),[]).append([current_w[comb],left,right])
+                        else:
+                            for s in skyline[comb][pr]:
+                                dominate_counter[comb][str(tuple(s))] += 1
+                        if len(left) > 1:
+                            pr2 = len(left)-1
+                            while not skyline[comb][pr2] and pr2 >= 1:
+                                pr2 -= 1
+                                if pr2 == 0:
+                                    break
+                            if pr2 > 0:
+                                if skyline[comb][pr2][0][0] <= current_w[comb]:
+                                    dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                                    for s in skyline[comb][pr2]:
+                                        dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                                    #del dominate_counter[str(tuple(s))]
+                                    dominate_counter[comb][str(tuple(s))] = 0
+                                    skyline[comb][pr2] = []            
+            left = left[1:]
+    for comb in attr_val_combs:
+        skyline[comb] = {i:j for i,j in skyline[comb].items() if j}
+        dominate_counter[comb] = {i:j for i,j in dominate_counter[comb].items() \
+                        if list(eval(i)) in [si for s in skyline[comb].values() for si in s]}
+    return(skyline,dominate_counter)
 
 
 # SHRINKAGE
 
+def Shr_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr):
+    s = [[str(i)] for i in edges_df.columns[:-1]]
+    e = [[str(i)] for i in edges_df.columns[1:]]
+    intvls = list(zip(s,e))
+    intvls = [list(i) for i in intvls]
+    
+    skyline = {j:{i:[] for i in range(1, len(edges_df.columns))} for j in attr_val_combs}
+    dominate_counter = {i:{} for i in attr_val_combs}
+    
+    for left,right in intvls:
+        min_length = len(left)
+        flag = True
+        while flag == True:
+            current_w = {}
+            previous_w = {}
+            diff,tia_diff = Diff_Static(nodes_df,edges_df,time_invariant_attr,left,right)
+            if not diff[1].empty:
+                agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc_attrs)
+                for comb in attr_val_combs:
+                    if comb in agg_diff[1].index:
+                        current_w[comb]= agg_diff[1].loc[comb,:][0]
+                        dominate_counter[comb][str((current_w[comb],left,right))] = 0
+                        pr = len(left)
+                        while not skyline[comb][pr] and pr >= min_length:
+                            pr -= 1
+                            if pr < min_length:
+                                break
+                        if pr < min_length:
+                            previous_w[comb] = 0
+                        else:
+                            previous_w[comb] = skyline[comb][pr][0][0]
+                        if current_w[comb] > previous_w[comb]:
+                            if len(left) == pr:
+                                dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                                for s in skyline[comb][pr]:
+                                    dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                                dominate_counter[comb][str(tuple(s))] = 0
+                            skyline[comb][len(left)] = [[current_w[comb],left,right]]
+                        elif current_w[comb] == previous_w[comb]:
+                            if len(left) == pr:
+                                skyline[comb].setdefault(len(left),[]).append([current_w[comb],left,right])
+                        else:
+                            for s in skyline[comb][pr]:
+                                dominate_counter[comb][str(tuple(s))] += 1
+                        if left[0] != edges_df.columns[0]:
+                            pr2 = len(left)+1
+                            while not skyline[comb][pr2] and pr2 <= len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])]):
+                                pr2 += 1
+                                if pr2 == len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
+                                    break
+                            if pr2 < len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
+                                if skyline[comb][pr2][0][0] <= current_w[comb]:
+                                    dominate_counter[comb][str((current_w[comb],left,right))] += 1
+                                    for s in skyline[comb][pr2]:
+                                        dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
+                                    dominate_counter[comb][str(tuple(s))] = 0
+                                    skyline[comb][pr2] = []
+            if left[0] != edges_df.columns[0]:
+                flag = True
+                left = [edges_df.columns[list(edges_df.columns).index(left[0])-1]]+left
+            else:
+                flag = False
+    for comb in attr_val_combs:
+        skyline[comb] = {i:j for i,j in skyline[comb].items() if j}
+        dominate_counter[comb] = {i:j for i,j in dominate_counter[comb].items() \
+                            if list(eval(i)) in [si for s in skyline[comb].values() for si in s]}
+    return(skyline,dominate_counter)
+
+
+
+
+# RUNTIME
+
 stc_attrs = ['gender']
 attr_val = list(time_invariant_attr[stc_attrs].value_counts().index)
 attr_val = [('M'), ('F')]
 attr_val_combs = list(itertools.product(attr_val, repeat=2))
 attr_val_combs = [tuple([i[0][0],i[1][0]]) for i in attr_val_combs]
 
-s = [[str(i)] for i in edges_df.columns[:-1]]
-e = [[str(i)] for i in edges_df.columns[1:]]
-intvls = list(zip(s,e))
-intvls = [list(i) for i in intvls]
+# DBLP
 
-skyline = {j:{i:[] for i in range(1, len(edges_df.columns))} for j in attr_val_combs}
-dominate_counter = {i:{} for i in attr_val_combs}
+edges_sliced = [edges_df.iloc[:,:6], edges_df.iloc[:,:11], edges_df.iloc[:,:16], edges_df.iloc[:,:21]]
+edges_sliced = [i.loc[~(i==0).all(axis=1)] for i in edges_sliced]
 
-for left,right in intvls:
-    min_length = len(left)
-    flag = True
-    while flag == True:
-        current_w = {}
-        previous_w = {}
-        diff,tia_diff = Diff_Static(nodes_df,edges_df,time_invariant_attr,left,right)
-        if not diff[1].empty:
-            agg_diff = Aggregate_Static_Dist(diff,tia_diff,stc_attrs)
-            for comb in attr_val_combs:
-                if comb in agg_diff[1].index:
-                    current_w[comb]= agg_diff[1].loc[comb,:][0]
-                    dominate_counter[comb][str((current_w[comb],left,right))] = 0
-                    pr = len(left)
-                    while not skyline[comb][pr] and pr >= min_length:
-                        pr -= 1
-                        if pr < min_length:
-                            break
-                    if pr < min_length:
-                        previous_w[comb] = 0
-                    else:
-                        previous_w[comb] = skyline[comb][pr][0][0]
-                    if current_w[comb] > previous_w[comb]:
-                        if len(left) == pr:
-                            dominate_counter[comb][str((current_w[comb],left,right))] += 1
-                            for s in skyline[comb][pr]:
-                                dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
-                            dominate_counter[comb][str(tuple(s))] = 0
-                        skyline[comb][len(left)] = [[current_w[comb],left,right]]
-                    elif current_w[comb] == previous_w[comb]:
-                        if len(left) == pr:
-                            skyline[comb].setdefault(len(left),[]).append([current_w[comb],left,right])
-                    else:
-                        for s in skyline[comb][pr]:
-                            dominate_counter[comb][str(tuple(s))] += 1
-                    if left[0] != edges_df.columns[0]:
-                        pr2 = len(left)+1
-                        while not skyline[comb][pr2] and pr2 <= len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])]):
-                            pr2 += 1
-                            if pr2 == len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
-                                break
-                        if pr2 < len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
-                            if skyline[comb][pr2][0][0] <= current_w[comb]:
-                                dominate_counter[comb][str((current_w[comb],left,right))] += 1
-                                for s in skyline[comb][pr2]:
-                                    dominate_counter[comb][str((current_w[comb],left,right))] += dominate_counter[comb][str(tuple(s))]
-                                dominate_counter[comb][str(tuple(s))] = 0
-                                skyline[comb][pr2] = []
-        if left[0] != edges_df.columns[0]:
-            flag = True
-            left = [edges_df.columns[list(edges_df.columns).index(left[0])-1]]+left
-        else:
-            flag = False
-for comb in attr_val_combs:
-    skyline[comb] = {i:j for i,j in skyline[comb].items() if j}
-    dominate_counter[comb] = {i:j for i,j in dominate_counter[comb].items() \
-                        if list(eval(i)) in [si for s in skyline[comb].values() for si in s]}
+result = []
+for j in range(5):
+    start_end_agg = []
+    for y in edges_sliced:
+        start = time.time()
+        sky_onepass_stab, dom_onepass_stab = Stab_one_pass(attr_val_combs,stc_attrs,nodes_df,y,time_invariant_attr)
+        end = time.time()
+        start_end_agg.append(end-start)
+    result.append(start_end_agg)
+
+res = pd.DataFrame(result).T
+res = res.mean(axis=1)
+
+# if file does not exist write header 
+if not os.path.isfile('experiments/runtime/one_pass/dblp/stab_gender.csv'):
+   res.to_csv('experiments/runtime/one_pass/dblp/stab_gender.csv', header='column_names')
+else: # else it exists so append without writing the header
+   res.to_csv('experiments/runtime/one_pass/dblp/stab_gender.csv', mode='a', header='column_names')
+
+
+result = []
+for j in range(5):
+    start_end_agg = []
+    for y in edges_sliced:
+        start = time.time()
+        sky_onepass_grow, dom_onepass_grow = Grow_one_pass(attr_val_combs,stc_attrs,nodes_df,y,time_invariant_attr)
+        end = time.time()
+        start_end_agg.append(end-start)
+    result.append(start_end_agg)
+
+res = pd.DataFrame(result).T
+res = res.mean(axis=1)
+
+# if file does not exist write header 
+if not os.path.isfile('experiments/runtime/one_pass/dblp/grow_gender.csv'):
+   res.to_csv('experiments/runtime/one_pass/dblp/grow_gender.csv', header='column_names')
+else: # else it exists so append without writing the header
+   res.to_csv('experiments/runtime/one_pass/dblp/grow_gender.csv', mode='a', header='column_names')
+
+
+result = []
+for j in range(5):
+    start_end_agg = []
+    for y in edges_sliced:
+        start = time.time()
+        sky_onepass_shr, dom_onepass_shr = Shr_one_pass(attr_val_combs,stc_attrs,nodes_df,y,time_invariant_attr)
+        end = time.time()
+        start_end_agg.append(end-start)
+    result.append(start_end_agg)
+
+res = pd.DataFrame(result).T
+res = res.mean(axis=1)
+
+# if file does not exist write header 
+if not os.path.isfile('experiments/one_pass/runtime/dblp/shr_gender.csv'):
+   res.to_csv('experiments/runtime/one_pass/dblp/shr_gender.csv', header='column_names')
+else: # else it exists so append without writing the header
+   res.to_csv('experiments/runtime/one_pass/dblp/shr_gender.csv', mode='a', header='column_names')
+
+
+
+# PRIMARY SCHOOL & MOVIELENS
+
+dataset = 'primary'
+dataset = 'movielens'
+
+result = []
+for j in range(5):
+    start_end_agg = []
+    start = time.time()
+    sky_onepass_stab, dom_onepass_stab = Stab_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr)
+    end = time.time()
+    start_end_agg.append(end-start)
+    result.append(start_end_agg)
+
+res = pd.DataFrame(result).T
+res = res.mean(axis=1)
+
+# if file does not exist write header 
+if not os.path.isfile('experiments/runtime/one_pass/'+dataset+'/stab_gender.csv'):
+   res.to_csv('experiments/runtime/one_pass/'+dataset+'/stab_gender.csv', header='column_names')
+else: # else it exists so append without writing the header
+   res.to_csv('experiments/runtime/one_pass/'+dataset+'/stab_gender.csv', mode='a', header='column_names')
+
+
+result = []
+for j in range(5):
+    start_end_agg = []
+    start = time.time()
+    sky_onepass_grow, dom_onepass_grow = Grow_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr)
+    end = time.time()
+    start_end_agg.append(end-start)
+    result.append(start_end_agg)
+
+res = pd.DataFrame(result).T
+res = res.mean(axis=1)
+
+# if file does not exist write header 
+if not os.path.isfile('experiments/runtime/one_pass/'+dataset+'/grow_gender.csv'):
+   res.to_csv('experiments/runtime/one_pass/'+dataset+'/grow_gender.csv', header='column_names')
+else: # else it exists so append without writing the header
+   res.to_csv('experiments/runtime/one_pass/'+dataset+'/grow_gender.csv', mode='a', header='column_names')
+
+
+result = []
+for j in range(5):
+    start_end_agg = []
+    start = time.time()
+    sky_onepass_shr, dom_onepass_shr = Shr_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr)
+    end = time.time()
+    start_end_agg.append(end-start)
+    result.append(start_end_agg)
+
+res = pd.DataFrame(result).T
+res = res.mean(axis=1)
+
+# if file does not exist write header 
+if not os.path.isfile('experiments/runtime/one_pass/'+dataset+'/shr_gender.csv'):
+   res.to_csv('experiments/runtime/one_pass/'+dataset+'/shr_gender.csv', header='column_names')
+else: # else it exists so append without writing the header
+   res.to_csv('experiments/runtime/one_pass/'+dataset+'/shr_gender.csv', mode='a', header='column_names')
