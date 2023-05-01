@@ -8,6 +8,7 @@ pio.renderers.default='svg'
 import plotly.graph_objects as go
 import time
 import os
+import gc
 
 
 # plot skyline
@@ -123,14 +124,9 @@ time_invariant_attr['gender'].nunique()
 ############################## ADBIS EXPERIMENTS ##############################
 
 x = [('F', 'F'), ('F', 'M'), ('M', 'F'), ('M', 'M')]
-y = [('1A','1A'), ('1B','1B'), ('2A','2A'), ('2B','2B'), ('3A','3A'), \
+x = [('1A','1A'), ('1B','1B'), ('2A','2A'), ('2B','2B'), ('3A','3A'), \
      ('3B','3B'), ('4A','4A'), ('4B','4B'), ('5A','5A'), ('5B','5B')]
 
-# Stability (tnew(inx)&told / told(inx)&tnew) (maximal)
-for xi in x:
-    attr_values = xi
-    stc_attrs = ['gender']
-    
 
 # SKYLINE - NEW IMPLEMENTATION
 
@@ -178,8 +174,7 @@ def Stab_INX_MAX(attr_val,stc,nodes,edges,time_inv):
                             dominate_counter[str((current_w,left,right))] += 1
                             for s in skyline[pr]:
                                 dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-                            #del dominate_counter[str(tuple(s))]
-                            dominate_counter[str(tuple(s))] = 0
+                                dominate_counter[str(tuple(s))] = 0
                         skyline[len(left)] = [[current_w,left,right]]
                     elif current_w == previous_w:
                         if len(left) == pr:
@@ -199,8 +194,7 @@ def Stab_INX_MAX(attr_val,stc,nodes,edges,time_inv):
                                 dominate_counter[str((current_w,left,right))] += 1
                                 for s in skyline[pr2]:
                                     dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-                                #del dominate_counter[str(tuple(s))]
-                                dominate_counter[str(tuple(s))] = 0
+                                    dominate_counter[str(tuple(s))] = 0
                                 skyline[pr2] = []
             left = left[1:]
     skyline = {i:j for i,j in skyline.items() if j}
@@ -228,23 +222,23 @@ def Intersection_Static_UN(nodesdf,edgesdf,tia,intvl):
     ne = [n,e]
     return(ne,tiainx)
 
-def Stab_INX_U_MIN(attr_val,stc,nodes,edges,time_inv):
-    s = [[str(i)] for i in edges_df.columns[:-1]]
-    e = [[str(i)] for i in edges_df.columns[1:]]
+def Stab_INX_U_MIN(attr_val,stc,nodes,edges,tia):
+    s = [[str(i)] for i in edges.columns[:-1]]
+    e = [[str(i)] for i in edges.columns[1:]]
     intvls = list(zip(s,e))
     intvls = [list(i) for i in intvls]
 
-    skyline = {i:[] for i in range(1, len(edges_df.columns))}
+    skyline = {i:[] for i in range(1, len(edges.columns))}
     dominate_counter = {}
     for left,right in intvls:
         min_length = len(left)
         flag = True
         while flag == True:
-            inx,tia_inx = Intersection_Static_UN(nodes_df,edges_df,time_invariant_attr,[left,right])
+            inx,tia_inx = Intersection_Static_UN(nodes,edges,tia,[left,right])
             if not inx[1].empty:
-                agg_inx = Aggregate_Static_Dist(inx,tia_inx,stc_attrs)
-                if attr_values in agg_inx[1].index:
-                    current_w = agg_inx[1].loc[attr_values,:][0]
+                agg_inx = Aggregate_Static_Dist(inx,tia_inx,stc)
+                if attr_val in agg_inx[1].index:
+                    current_w = agg_inx[1].loc[attr_val,:][0]
                     dominate_counter[str((current_w,left,right))] = 0
                     pr = len(left)
                     while not skyline[pr] and pr >= min_length:
@@ -260,7 +254,7 @@ def Stab_INX_U_MIN(attr_val,stc,nodes,edges,time_inv):
                             dominate_counter[str((current_w,left,right))] += 1
                             for s in skyline[pr]:
                                 dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-                            dominate_counter[str(tuple(s))] = 0
+                                dominate_counter[str(tuple(s))] = 0
                         skyline[len(left)] = [[current_w,left,right]]
                     elif current_w == previous_w:
                         if len(left) == pr:
@@ -268,22 +262,22 @@ def Stab_INX_U_MIN(attr_val,stc,nodes,edges,time_inv):
                     else:
                         for s in skyline[pr]:
                             dominate_counter[str(tuple(s))] += 1
-                    if left[0] != edges_df.columns[0]:
+                    if left[0] != edges.columns[0]:
                         pr2 = len(left)+1
-                        while not skyline[pr2] and pr2 <= len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])]):
+                        while not skyline[pr2] and pr2 <= len(list(edges.columns)[:list(edges.columns).index(right[0])]):
                             pr2 += 1
-                            if pr2 == len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
+                            if pr2 == len(list(edges.columns)[:list(edges.columns).index(right[0])])+1:
                                 break
-                        if pr2 < len(list(edges_df.columns)[:list(edges_df.columns).index(right[0])])+1:
+                        if pr2 < len(list(edges.columns)[:list(edges.columns).index(right[0])])+1:
                             if skyline[pr2][0][0] <= current_w:
                                 dominate_counter[str((current_w,left,right))] += 1
                                 for s in skyline[pr2]:
                                     dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-                                dominate_counter[str(tuple(s))] = 0
+                                    dominate_counter[str(tuple(s))] = 0
                                 skyline[pr2] = []
-            if left[0] != edges_df.columns[0]:
+            if left[0] != edges.columns[0]:
                 flag = True
-                left = [edges_df.columns[list(edges_df.columns).index(left[0])-1]]+left
+                left = [edges.columns[list(edges.columns).index(left[0])-1]]+left
             else:
                 flag = False
     skyline = {i:j for i,j in skyline.items() if j}
@@ -330,7 +324,7 @@ def Growth_UN_MAX(attr_val,stc,nodes,edges,time_inv):
                             dominate_counter[str((current_w,left,right))] += 1
                             for s in skyline[pr]:
                                 dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-                            dominate_counter[str(tuple(s))] = 0
+                                dominate_counter[str(tuple(s))] = 0
                         skyline[len(left)] = [[current_w,left,right]]
                     elif current_w == previous_w:
                         if len(left) == pr:
@@ -349,7 +343,7 @@ def Growth_UN_MAX(attr_val,stc,nodes,edges,time_inv):
                                 dominate_counter[str((current_w,left,right))] += 1
                                 for s in skyline[pr2]:
                                     dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-                                dominate_counter[str(tuple(s))] = 0
+                                    dominate_counter[str(tuple(s))] = 0
                                 skyline[pr2] = []
             left = left[1:]
     skyline = {i:j for i,j in skyline.items() if j}
@@ -394,7 +388,7 @@ def Shrink_UN_MIN(attr_val,stc,nodes,edges,time_inv):
                             dominate_counter[str((current_w,left,right))] += 1
                             for s in skyline[pr]:
                                 dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-                            dominate_counter[str(tuple(s))] = 0
+                                dominate_counter[str(tuple(s))] = 0
                         skyline[len(left)] = [[current_w,left,right]]
                     elif current_w == previous_w:
                         if len(left) == pr:
@@ -413,7 +407,7 @@ def Shrink_UN_MIN(attr_val,stc,nodes,edges,time_inv):
                                 dominate_counter[str((current_w,left,right))] += 1
                                 for s in skyline[pr2]:
                                     dominate_counter[str((current_w,left,right))] += dominate_counter[str(tuple(s))]
-                                dominate_counter[str(tuple(s))] = 0
+                                    dominate_counter[str(tuple(s))] = 0
                                 skyline[pr2] = []
             if left[0] != edges.columns[0]:
                 flag = True
@@ -448,31 +442,80 @@ for k,val in dominate_counter.items():
 
 x = [('F', 'F'), ('F', 'M'), ('M', 'F'), ('M', 'M')]
 stc_attrs = ['gender']
+dataset = 'movielens'
+
+x = [('1A','1A'), ('1B','1B'), ('2A','2A'), ('2B','2B'), ('3A','3A'), \
+     ('3B','3B'), ('4A','4A'), ('4B','4B'), ('5A','5A'), ('5B','5B')]
+stc_attrs = ['class']
+dataset = 'primary'
+
+dataset = 'dblp'
 
 top_stab = {}
 for xi in x:
     skyline_stab, dominance_stab = Stab_INX_MAX(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-    top_stab[str(xi)] = [skyline_stab, dominance_stab]
-print('size stab', [len(i[0]) for i in top_stab.values()])
+    size = sum([len(i) for i in skyline_stab.values()])
+    top_stab[str(xi)] = [skyline_stab, dominance_stab, size]
+    print('size stab', xi, size)
+
+df = pd.DataFrame(top_stab).T
+# if file does not exist write header 
+if not os.path.isfile('experiments/qualitative/'+dataset+'/stab_'+stc_attrs[0]+'_sky.csv'):
+   df.to_csv('experiments/qualitative/'+dataset+'/stab_'+stc_attrs[0]+'_sky.csv', header='column_names')
+else: # else it exists so append without writing the header
+   df.to_csv('experiments/qualitative/'+dataset+'/stab_'+stc_attrs[0]+'_sky.csv', mode='a', header='column_names')
 
 top_grow = {}
 for xi in x:
     skyline_grow, dominance_grow = Growth_UN_MAX(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-    top_grow[str(xi)] = [skyline_grow, dominance_grow]
-print('size grow', [len(i[0]) for i in top_grow.values()])
+    size = sum([len(i) for i in skyline_grow.values()])
+    top_grow[str(xi)] = [skyline_grow, dominance_grow, size]
+    print('size grow', xi, size)
+
+df = pd.DataFrame(top_grow).T
+# if file does not exist write header 
+if not os.path.isfile('experiments/qualitative/'+dataset+'/grow_'+stc_attrs[0]+'_sky.csv'):
+   df.to_csv('experiments/qualitative/'+dataset+'/grow_'+stc_attrs[0]+'_sky.csv', header='column_names')
+else: # else it exists so append without writing the header
+   df.to_csv('experiments/qualitative/'+dataset+'/grow_'+stc_attrs[0]+'_sky.csv', mode='a', header='column_names')
 
 top_shr = {}
 for xi in x:
     skyline_shr, dominance_shr = Shrink_UN_MIN(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-    top_shr[str(xi)] = [skyline_shr, dominance_shr]
-print('size shr', [len(i[0]) for i in top_shr.values()])
+    size = sum([len(i) for i in skyline_shr.values()])
+    top_shr[str(xi)] = [skyline_shr, dominance_shr, size]
+    print('size shr', xi, size)
 
-# 2 TIME & SIZE EXPERIMENTS FOR DBLP
+df = pd.DataFrame(top_shr).T
+# if file does not exist write header 
+if not os.path.isfile('experiments/qualitative/'+dataset+'/shr_'+stc_attrs[0]+'_sky.csv'):
+   df.to_csv('experiments/qualitative/'+dataset+'/shr_'+stc_attrs[0]+'_sky.csv', header='column_names')
+else: # else it exists so append without writing the header
+   df.to_csv('experiments/qualitative/'+dataset+'/shr_'+stc_attrs[0]+'_sky.csv', mode='a', header='column_names')
+
+
+top_stabU = {}
+for xi in x:
+    skyline_stabU, dominance_stabU = Stab_INX_U_MIN(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
+    size = sum([len(i) for i in skyline_stabU.values()])
+    top_stabU[str(xi)] = [skyline_stabU, dominance_stabU, size]
+    print('size stabU', xi, size)
+
+df = pd.DataFrame(top_stabU).T
+# if file does not exist write header 
+if not os.path.isfile('experiments/qualitative/'+dataset+'/stabU_'+stc_attrs[0]+'_sky.csv'):
+   df.to_csv('experiments/qualitative/'+dataset+'/stabU_'+stc_attrs[0]+'_sky.csv', header='column_names')
+else: # else it exists so append without writing the header
+   df.to_csv('experiments/qualitative/'+dataset+'/stabU_'+stc_attrs[0]+'_sky.csv', mode='a', header='column_names')
+
+
+
+
+# 2 TIME & SIZE EXPERIMENTS FOR DBLP | RUNTIME
 
 # DBLP
 
 edges_sliced = [edges_df.iloc[:,:6], edges_df.iloc[:,:11], edges_df.iloc[:,:16], edges_df.iloc[:,:21]]
-
 edges_sliced = [i.loc[~(i==0).all(axis=1)] for i in edges_sliced]
 
 x = [('F', 'F'), ('F', 'M'), ('M', 'F'), ('M', 'M')]
@@ -483,14 +526,19 @@ for xi in x:
     for j in range(5):
         start_end_agg = []
         for y in edges_sliced:
-            start = time.time()
+            gc.disable()
+            start = time.perf_counter_ns()
             skyline_stab, dominance_stab = Stab_INX_MAX(xi,stc_attrs,nodes_df,y,time_invariant_attr)
-            end = time.time()
+            end = time.perf_counter_ns()
+            gc.enable()
             start_end_agg.append(end-start)
         result.append(start_end_agg)
     
     res = pd.DataFrame(result).T
-    res[str(xi)] = res.mean(axis=1)
+    res = res*(1e-9)
+    res[str(xi)+'_avg'] = res.mean(axis=1)
+    res[str(xi)+'_min'] = res.min(axis=1)
+    res = res.round(2)
 
     # if file does not exist write header 
     if not os.path.isfile('experiments/runtime/dblp/stab_gender.csv'):
@@ -504,14 +552,19 @@ for xi in x:
     for j in range(5):
         start_end_agg = []
         for y in edges_sliced:
-            start = time.time()
+            gc.disable()
+            start = time.perf_counter_ns()
             skyline_grow, dominance_grow = Growth_UN_MAX(xi,stc_attrs,nodes_df,y,time_invariant_attr)
-            end = time.time()
+            end = time.perf_counter_ns()
+            gc.enable()
             start_end_agg.append(end-start)
         result.append(start_end_agg)
     
     res = pd.DataFrame(result).T
-    res[str(xi)] = res.mean(axis=1)
+    res = res*(1e-9)
+    res[str(xi)+'_avg'] = res.mean(axis=1)
+    res[str(xi)+'_min'] = res.min(axis=1)
+    res = res.round(2)
 
     # if file does not exist write header 
     if not os.path.isfile('experiments/runtime/dblp/grow_gender.csv'):
@@ -525,14 +578,19 @@ for xi in x:
     for j in range(5):
         start_end_agg = []
         for y in edges_sliced:
-            start = time.time()
+            gc.disable()
+            start = time.perf_counter_ns()
             skyline_shr, dominance_shr = Shrink_UN_MIN(xi,stc_attrs,nodes_df,y,time_invariant_attr)
-            end = time.time()
+            end = time.perf_counter_ns()
+            gc.enable()
             start_end_agg.append(end-start)
         result.append(start_end_agg)
     
     res = pd.DataFrame(result).T
-    res[str(xi)] = res.mean(axis=1)
+    res = res*(1e-9)
+    res[str(xi)+'_avg'] = res.mean(axis=1)
+    res[str(xi)+'_min'] = res.min(axis=1)
+    res = res.round(2)
 
     # if file does not exist write header 
     if not os.path.isfile('experiments/runtime/dblp/shr_gender.csv'):
@@ -540,11 +598,46 @@ for xi in x:
     else: # else it exists so append without writing the header
        res.to_csv('experiments/runtime/dblp/shr_gender.csv', mode='a', header='column_names')
 
+# StabU
 
-# Primary School & MovieLens for full dataset
+for xi in x:
+    result = []
+    for j in range(5):
+        start_end_agg = []
+        for y in edges_sliced:
+            gc.disable()
+            start = time.perf_counter_ns()
+            skyline_stabU, dominance_stabU = Stab_INX_U_MIN(xi,stc_attrs,nodes_df,y,time_invariant_attr)
+            end = time.perf_counter_ns()
+            gc.enable()
+            start_end_agg.append(end-start)
+        result.append(start_end_agg)
+
+    res = pd.DataFrame(result).T
+    res = res*(1e-9)
+    res[str(xi)+'_avg'] = res.mean(axis=1)
+    res[str(xi)+'_min'] = res.min(axis=1)
+    res = res.round(2)
+
+    # if file does not exist write header 
+    if not os.path.isfile('experiments/runtime/dblp/stabU_gender.csv'):
+       res.to_csv('experiments/runtime/dblp/stabU_gender.csv', header='column_names')
+    else: # else it exists so append without writing the header
+       res.to_csv('experiments/runtime/dblp/stabU_gender.csv', mode='a', header='column_names')
+
+
+
+# Primary School & MovieLens RUNTIME for full dataset
 
 x = [('F', 'F'), ('F', 'M'), ('M', 'F'), ('M', 'M')]
+attribute = 'gender'
 stc_attrs = ['gender']
+
+x = [('1A','1A'), ('1B','1B'), ('2A','2A'), ('2B','2B'), ('3A','3A'), \
+     ('3B','3B'), ('4A','4A'), ('4B','4B'), ('5A','5A'), ('5B','5B')]
+attribute = 'class'
+stc_attrs = ['class']
+
 dataset = 'primary'
 dataset = 'movielens'
 
@@ -552,60 +645,103 @@ for xi in x:
     result = []
     for j in range(5):
         start_end_agg = []
-        start = time.time()
+        gc.disable()
+        start = time.perf_counter_ns()
         skyline_stab, dominance_stab = Stab_INX_MAX(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-        end = time.time()
+        end = time.perf_counter_ns()
+        gc.enable()
         start_end_agg.append(end-start)
         result.append(start_end_agg)
     
     res = pd.DataFrame(result).T
-    res[str(xi)] = res.mean(axis=1)
+    res = res*(1e-9)
+    res[str(xi)+'_avg'] = res.mean(axis=1)
+    #res[str(xi)+'_min'] = res.min(axis=1)
+    res = res.round(2)
 
     # if file does not exist write header 
-    if not os.path.isfile('experiments/runtime/'+dataset+'/stab_gender.csv'):
-       res.to_csv('experiments/runtime/'+dataset+'/stab_gender.csv', header='column_names')
+    if not os.path.isfile('experiments/runtime/'+dataset+'/stab_'+attribute+'.csv'):
+       res.to_csv('experiments/runtime/'+dataset+'/stab_'+attribute+'.csv', header='column_names')
     else: # else it exists so append without writing the header
-       res.to_csv('experiments/runtime/'+dataset+'/stab_gender.csv', mode='a', header='column_names')
+       res.to_csv('experiments/runtime/'+dataset+'/stab_'+attribute+'.csv', mode='a', header='column_names')
 
 
 for xi in x:
     result = []
     for j in range(5):
         start_end_agg = []
-        start = time.time()
+        gc.disable()
+        start = time.perf_counter_ns()
         skyline_grow, dominance_grow = Growth_UN_MAX(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-        end = time.time()
+        end = time.perf_counter_ns()
+        gc.enable()
         start_end_agg.append(end-start)
         result.append(start_end_agg)
     
     res = pd.DataFrame(result).T
-    res[str(xi)] = res.mean(axis=1)
+    res = res*(1e-9)
+    res[str(xi)+'_avg'] = res.mean(axis=1)
+    #res[str(xi)+'_min'] = res.min(axis=1)
+    res = res.round(2)
 
     # if file does not exist write header 
-    if not os.path.isfile('experiments/runtime/'+dataset+'/grow_gender.csv'):
-       res.to_csv('experiments/runtime/'+dataset+'/grow_gender.csv', header='column_names')
+    if not os.path.isfile('experiments/runtime/'+dataset+'/grow_'+attribute+'.csv'):
+       res.to_csv('experiments/runtime/'+dataset+'/grow_'+attribute+'.csv', header='column_names')
     else: # else it exists so append without writing the header
-       res.to_csv('experiments/runtime/'+dataset+'/grow_gender.csv', mode='a', header='column_names')
+       res.to_csv('experiments/runtime/'+dataset+'/grow_'+attribute+'.csv', mode='a', header='column_names')
 
 
 for xi in x:
     result = []
     for j in range(5):
         start_end_agg = []
-        start = time.time()
+        gc.disable()
+        start = time.perf_counter_ns()
         skyline_shr, dominance_shr = Shrink_UN_MIN(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-        end = time.time()
+        end = time.perf_counter_ns()
+        gc.enable()
         start_end_agg.append(end-start)
         result.append(start_end_agg)
     
     res = pd.DataFrame(result).T
-    res[str(xi)] = res.mean(axis=1)
+    res = res*(1e-9)
+    res[str(xi)+'_avg'] = res.mean(axis=1)
+    #res[str(xi)+'_min'] = res.min(axis=1)
+    res = res.round(2)
 
     # if file does not exist write header 
-    if not os.path.isfile('experiments/runtime/'+dataset+'/shr_gender.csv'):
-       res.to_csv('experiments/runtime/'+dataset+'/shr_gender.csv', header='column_names')
+    if not os.path.isfile('experiments/runtime/'+dataset+'/shr_'+attribute+'.csv'):
+       res.to_csv('experiments/runtime/'+dataset+'/shr_'+attribute+'.csv', header='column_names')
     else: # else it exists so append without writing the header
-       res.to_csv('experiments/runtime/'+dataset+'/shr_gender.csv', mode='a', header='column_names')
+       res.to_csv('experiments/runtime/'+dataset+'/shr_'+attribute+'.csv', mode='a', header='column_names')
+
+
+# StabU
+
+for xi in x:
+    result = []
+    for j in range(5):
+        start_end_agg = []
+        gc.disable()
+        start = time.perf_counter_ns()
+        skyline_stabU, dominance_stabU = Stab_INX_U_MIN(xi,stc_attrs,nodes_df,edges_df,time_invariant_attr)
+        end = time.perf_counter_ns()
+        gc.enable()
+        start_end_agg.append(end-start)
+        result.append(start_end_agg)
+
+    res = pd.DataFrame(result).T
+    res = res*(1e-9)
+    res[str(xi)+'_avg'] = res.mean(axis=1)
+    #res[str(xi)+'_min'] = res.min(axis=1)
+    res = res.round(2)
+
+    # if file does not exist write header 
+    if not os.path.isfile('experiments/runtime/'+dataset+'/stabU_'+attribute+'.csv'):
+       res.to_csv('experiments/runtime/'+dataset+'/stabU_'+attribute+'.csv', header='column_names')
+    else: # else it exists so append without writing the header
+       res.to_csv('experiments/runtime/'+dataset+'/stabU_'+attribute+'.csv', mode='a', header='column_names')
+
 
 
 # =============================================================================
@@ -902,7 +1038,7 @@ def Shr_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr)
 
 
 
-# RUNTIME
+# RUNTIME ONE-PASS
 
 stc_attrs = ['gender']
 attr_val = list(time_invariant_attr[stc_attrs].value_counts().index)
@@ -919,14 +1055,19 @@ result = []
 for j in range(5):
     start_end_agg = []
     for y in edges_sliced:
-        start = time.time()
+        gc.disable()
+        start = time.perf_counter_ns()
         sky_onepass_stab, dom_onepass_stab = Stab_one_pass(attr_val_combs,stc_attrs,nodes_df,y,time_invariant_attr)
-        end = time.time()
+        end = time.perf_counter_ns()
+        gc.enable()
         start_end_agg.append(end-start)
     result.append(start_end_agg)
 
 res = pd.DataFrame(result).T
-res = res.mean(axis=1)
+res = res*(1e-9)
+res['all_avg'] = res.mean(axis=1)
+res['all_min'] = res.min(axis=1)
+res = res.round(2)
 
 # if file does not exist write header 
 if not os.path.isfile('experiments/runtime/one_pass/dblp/stab_gender.csv'):
@@ -939,14 +1080,19 @@ result = []
 for j in range(5):
     start_end_agg = []
     for y in edges_sliced:
-        start = time.time()
+        gc.disable()
+        start = time.perf_counter_ns()
         sky_onepass_grow, dom_onepass_grow = Grow_one_pass(attr_val_combs,stc_attrs,nodes_df,y,time_invariant_attr)
-        end = time.time()
+        end = time.perf_counter_ns()
+        gc.enable()
         start_end_agg.append(end-start)
     result.append(start_end_agg)
 
 res = pd.DataFrame(result).T
-res = res.mean(axis=1)
+res = res*(1e-9)
+res['all_avg'] = res.mean(axis=1)
+res['all_min'] = res.min(axis=1)
+res = res.round(2)
 
 # if file does not exist write header 
 if not os.path.isfile('experiments/runtime/one_pass/dblp/grow_gender.csv'):
@@ -959,14 +1105,19 @@ result = []
 for j in range(5):
     start_end_agg = []
     for y in edges_sliced:
-        start = time.time()
+        gc.disable()
+        start = time.perf_counter_ns()
         sky_onepass_shr, dom_onepass_shr = Shr_one_pass(attr_val_combs,stc_attrs,nodes_df,y,time_invariant_attr)
-        end = time.time()
+        end = time.perf_counter_ns()
+        gc.enable()
         start_end_agg.append(end-start)
     result.append(start_end_agg)
 
 res = pd.DataFrame(result).T
-res = res.mean(axis=1)
+res = res*(1e-9)
+res['all_avg'] = res.mean(axis=1)
+res['all_min'] = res.min(axis=1)
+res = res.round(2)
 
 # if file does not exist write header 
 if not os.path.isfile('experiments/one_pass/runtime/dblp/shr_gender.csv'):
@@ -984,14 +1135,19 @@ dataset = 'movielens'
 result = []
 for j in range(5):
     start_end_agg = []
-    start = time.time()
+    gc.disable()
+    start = time.perf_counter_ns()
     sky_onepass_stab, dom_onepass_stab = Stab_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-    end = time.time()
+    end = time.perf_counter_ns()
+    gc.enable()
     start_end_agg.append(end-start)
     result.append(start_end_agg)
 
 res = pd.DataFrame(result).T
-res = res.mean(axis=1)
+res = res*(1e-9)
+res['all_avg'] = res.mean(axis=1)
+res['all_min'] = res.min(axis=1)
+res = res.round(2)
 
 # if file does not exist write header 
 if not os.path.isfile('experiments/runtime/one_pass/'+dataset+'/stab_gender.csv'):
@@ -1003,14 +1159,19 @@ else: # else it exists so append without writing the header
 result = []
 for j in range(5):
     start_end_agg = []
-    start = time.time()
+    gc.disable()
+    start = time.perf_counter_ns()
     sky_onepass_grow, dom_onepass_grow = Grow_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-    end = time.time()
+    end = time.perf_counter_ns()
+    gc.enable()
     start_end_agg.append(end-start)
     result.append(start_end_agg)
 
 res = pd.DataFrame(result).T
-res = res.mean(axis=1)
+res = res*(1e-9)
+res['all_avg'] = res.mean(axis=1)
+res['all_min'] = res.min(axis=1)
+res = res.round(2)
 
 # if file does not exist write header 
 if not os.path.isfile('experiments/runtime/one_pass/'+dataset+'/grow_gender.csv'):
@@ -1022,14 +1183,19 @@ else: # else it exists so append without writing the header
 result = []
 for j in range(5):
     start_end_agg = []
-    start = time.time()
+    gc.disable()
+    start = time.perf_counter_ns()
     sky_onepass_shr, dom_onepass_shr = Shr_one_pass(attr_val_combs,stc_attrs,nodes_df,edges_df,time_invariant_attr)
-    end = time.time()
+    end = time.perf_counter_ns()
+    gc.enable()
     start_end_agg.append(end-start)
     result.append(start_end_agg)
 
 res = pd.DataFrame(result).T
-res = res.mean(axis=1)
+res = res*(1e-9)
+res['all_avg'] = res.mean(axis=1)
+res['all_min'] = res.min(axis=1)
+res = res.round(2)
 
 # if file does not exist write header 
 if not os.path.isfile('experiments/runtime/one_pass/'+dataset+'/shr_gender.csv'):
